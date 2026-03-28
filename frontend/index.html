@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VAS Reconciliation</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+        .container { max-width: 720px; width: 100%; }
+
+        h1 { font-size: 1.6rem; margin-bottom: 8px; }
+        .subtitle { color: #666; margin-bottom: 24px; font-size: 0.95rem; }
+
+        .provider-badge {
+            display: inline-block;
+            background: #e8f0fe;
+            color: #1a73e8;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-bottom: 24px;
+        }
+
+        /* Upload zone */
+        .upload-zone {
+            border: 2px dashed #ccc;
+            border-radius: 12px;
+            padding: 48px 24px;
+            text-align: center;
+            background: #fff;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .upload-zone.dragover { border-color: #1a73e8; background: #e8f0fe; }
+        .upload-zone.disabled { pointer-events: none; opacity: 0.5; }
+        .upload-zone p { color: #666; margin-bottom: 12px; }
+        .upload-zone .file-name { font-weight: 600; color: #333; margin-top: 8px; }
+
+        .btn {
+            display: inline-block;
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-primary { background: #1a73e8; color: #fff; }
+        .btn-primary:hover { background: #1557b0; }
+        .btn-primary:disabled { background: #94bef7; cursor: not-allowed; }
+        .btn-secondary { background: #e8e8e8; color: #333; margin-left: 8px; }
+        .btn-secondary:hover { background: #d0d0d0; }
+
+        .actions { margin-top: 16px; }
+
+        .partner-select { margin-bottom: 16px; }
+        .partner-select label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 6px;
+        }
+        .partner-select select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            background: #fff;
+            color: #333;
+            cursor: pointer;
+        }
+        .partner-select select:focus { outline: none; border-color: #1a73e8; }
+
+        /* Processing */
+        .processing { display: none; text-align: center; padding: 48px; background: #fff; border-radius: 12px; }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 4px solid #e8e8e8;
+            border-top-color: #1a73e8;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Results */
+        .results { display: none; background: #fff; border-radius: 12px; padding: 24px; }
+        .results h2 { font-size: 1.2rem; margin-bottom: 16px; }
+
+        .period-notice {
+            background: #e8f0fe;
+            color: #1a73e8;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            margin-bottom: 16px;
+        }
+
+        .match-rate {
+            font-size: 2.4rem;
+            font-weight: 700;
+            margin: 8px 0;
+        }
+        .match-rate.green { color: #1e8e3e; }
+        .match-rate.amber { color: #e8a000; }
+        .match-rate.red { color: #d93025; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+            margin: 16px 0;
+        }
+        .stat-card {
+            background: #f5f7fa;
+            border-radius: 8px;
+            padding: 12px 16px;
+        }
+        .stat-card .label { font-size: 0.8rem; color: #666; }
+        .stat-card .value { font-size: 1.3rem; font-weight: 700; }
+
+        .flags { margin: 16px 0; }
+        .flag-badge {
+            display: inline-block;
+            background: #fef3cd;
+            color: #856404;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin: 4px 4px 4px 0;
+        }
+
+        .summary-text {
+            background: #f5f7fa;
+            padding: 16px;
+            border-radius: 8px;
+            line-height: 1.6;
+            margin: 16px 0;
+        }
+
+        /* Error */
+        .error { display: none; background: #fff; border-radius: 12px; padding: 24px; }
+        .error-message {
+            background: #fce8e6;
+            color: #d93025;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>VAS Reconciliation</h1>
+    <p class="subtitle">Upload a partner Excel file to reconcile against internal records</p>
+    <div class="provider-badge" id="providerBadge">Loading...</div>
+
+    <!-- Idle state -->
+    <div id="idleState">
+        <div class="partner-select">
+            <label for="partnerSelect">Partner</label>
+            <select id="partnerSelect">
+                <option value="" disabled selected>Select a partner</option>
+                <option value="xpresspay">Xpresspay</option>
+                <option value="easyPay">EasyPay</option>
+            </select>
+        </div>
+        <div class="upload-zone" id="uploadZone">
+            <p>Drag & drop your .xlsx file here, or click to browse</p>
+            <input type="file" id="fileInput" accept=".xlsx" hidden>
+            <div class="file-name" id="fileName"></div>
+        </div>
+        <div class="actions">
+            <button class="btn btn-primary" id="uploadBtn" disabled>Run Reconciliation</button>
+        </div>
+    </div>
+
+    <!-- Processing state -->
+    <div class="processing" id="processingState">
+        <div class="spinner"></div>
+        <p>Reconciliation in progress…</p>
+    </div>
+
+    <!-- Results state -->
+    <div class="results" id="resultsState">
+        <h2>Reconciliation Results</h2>
+        <div class="period-notice" id="periodNotice"></div>
+        <div style="text-align:center">
+            <div style="font-size:0.9rem;color:#666">Match Rate</div>
+            <div class="match-rate" id="matchRate"></div>
+        </div>
+        <div class="stats-grid" id="statsGrid"></div>
+        <div class="flags" id="flagsContainer"></div>
+        <div class="summary-text" id="summaryText"></div>
+        <div class="actions">
+            <button class="btn btn-primary" id="downloadBtn">Download Excel Report</button>
+            <button class="btn btn-secondary" id="resetBtn">Run Another Reconciliation</button>
+        </div>
+    </div>
+
+    <!-- Error state -->
+    <div class="error" id="errorState">
+        <h2>Error</h2>
+        <div class="error-message" id="errorMessage"></div>
+        <button class="btn btn-secondary" id="errorResetBtn">Try Again</button>
+    </div>
+</div>
+
+<script>
+    const uploadZone = document.getElementById("uploadZone");
+    const fileInput = document.getElementById("fileInput");
+    const fileName = document.getElementById("fileName");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const partnerSelect = document.getElementById("partnerSelect");
+    const providerBadge = document.getElementById("providerBadge");
+
+    const idleState = document.getElementById("idleState");
+    const processingState = document.getElementById("processingState");
+    const resultsState = document.getElementById("resultsState");
+    const errorState = document.getElementById("errorState");
+
+    let selectedFile = null;
+    let downloadUrl = null;
+
+    function updateUploadBtn() {
+        uploadBtn.disabled = !(selectedFile && partnerSelect.value);
+    }
+    partnerSelect.addEventListener("change", updateUploadBtn);
+
+    // Fetch provider info
+    fetch("/health").then(r => r.json()).then(data => {
+        providerBadge.textContent = "LLM: " + data.llm_provider;
+    }).catch(() => {
+        providerBadge.textContent = "LLM: unknown";
+    });
+
+    // Upload zone interactions
+    uploadZone.addEventListener("click", () => fileInput.click());
+
+    uploadZone.addEventListener("dragover", e => {
+        e.preventDefault();
+        uploadZone.classList.add("dragover");
+    });
+    uploadZone.addEventListener("dragleave", () => {
+        uploadZone.classList.remove("dragover");
+    });
+    uploadZone.addEventListener("drop", e => {
+        e.preventDefault();
+        uploadZone.classList.remove("dragover");
+        if (e.dataTransfer.files.length > 0) selectFile(e.dataTransfer.files[0]);
+    });
+
+    fileInput.addEventListener("change", () => {
+        if (fileInput.files.length > 0) selectFile(fileInput.files[0]);
+    });
+
+    function selectFile(file) {
+        if (!file.name.endsWith(".xlsx")) {
+            alert("Please select an .xlsx file");
+            return;
+        }
+        selectedFile = file;
+        fileName.textContent = file.name;
+        updateUploadBtn();
+    }
+
+    // Upload and run reconciliation
+    uploadBtn.addEventListener("click", async () => {
+        if (!selectedFile) return;
+
+        showState("processing");
+
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+        formData.append("partner", partnerSelect.value);
+
+        try {
+            const response = await fetch("/upload", { method: "POST", body: formData });
+            const data = await response.json();
+
+            if (data.status === "error") {
+                showError(data.message, data.errors);
+            } else {
+                showResults(data);
+            }
+        } catch (err) {
+            showError("Network error: could not reach the server", [err.message]);
+        }
+    });
+
+    function showState(state) {
+        idleState.style.display = state === "idle" ? "block" : "none";
+        processingState.style.display = state === "processing" ? "block" : "none";
+        resultsState.style.display = state === "results" ? "block" : "none";
+        errorState.style.display = state === "error" ? "block" : "none";
+    }
+
+    function showResults(data) {
+        // Period notice
+        document.getElementById("periodNotice").textContent =
+            "Inferred billing period: " + data.period.start + " to " + data.period.end;
+
+        // Match rate with color coding
+        const rateEl = document.getElementById("matchRate");
+        rateEl.textContent = data.match_rate + "%";
+        rateEl.className = "match-rate";
+        if (data.match_rate >= 95) rateEl.classList.add("green");
+        else if (data.match_rate >= 90) rateEl.classList.add("amber");
+        else rateEl.classList.add("red");
+
+        // Stats grid
+        const stats = [
+            { label: "Partner Records", value: data.partner_total },
+            { label: "Internal Records", value: data.internal_total },
+            { label: "Matched Total", value: data.matched_total },
+            { label: "Matched Clean", value: data.matched_clean },
+            { label: "Matched Flagged", value: data.matched_flagged },
+            { label: "Missing in Ours", value: data.missing_in_ours_count },
+            { label: "Missing in Partner", value: data.missing_in_partner_count },
+        ];
+        const grid = document.getElementById("statsGrid");
+        grid.innerHTML = stats.map(s =>
+            `<div class="stat-card"><div class="label">${s.label}</div><div class="value">${s.value}</div></div>`
+        ).join("");
+
+        // Flags
+        const flagsEl = document.getElementById("flagsContainer");
+        if (data.flags && data.flags.length > 0) {
+            flagsEl.innerHTML = data.flags.map(f =>
+                `<span class="flag-badge">${f}</span>`
+            ).join("");
+        } else {
+            flagsEl.innerHTML = "";
+        }
+
+        // Summary
+        document.getElementById("summaryText").textContent = data.summary_text;
+
+        // Download URL
+        downloadUrl = data.download_url;
+
+        showState("results");
+    }
+
+    function showError(message, errors) {
+        const el = document.getElementById("errorMessage");
+        let html = message;
+        if (errors && errors.length > 0) {
+            html += "<br><br><small>" + errors.join("<br>") + "</small>";
+        }
+        el.innerHTML = html;
+        showState("error");
+    }
+
+    // Download button
+    document.getElementById("downloadBtn").addEventListener("click", () => {
+        if (downloadUrl) window.location = downloadUrl;
+    });
+
+    // Reset buttons
+    function reset() {
+        selectedFile = null;
+        downloadUrl = null;
+        fileInput.value = "";
+        fileName.textContent = "";
+        partnerSelect.value = "";
+        uploadBtn.disabled = true;
+        showState("idle");
+    }
+    document.getElementById("resetBtn").addEventListener("click", reset);
+    document.getElementById("errorResetBtn").addEventListener("click", reset);
+</script>
+</body>
+</html>
