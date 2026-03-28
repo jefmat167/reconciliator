@@ -49,7 +49,7 @@ GROQ_API_KEY=your_key_here
 
 MONGODB_URI=your_mongodb_connection_string
 MONGODB_DB=your_database_name
-MONGODB_COLLECTION=orders1
+MONGODB_COLLECTION=collection_name
 
 EXPORT_OUTPUT_DIR=./exports
 FIELDS_TO_COMPARE=amount,status
